@@ -39,6 +39,25 @@ impl Scanner {
             }
         }
     }
+
+    /// Advance the cursor if match exact, return true, else return false
+    pub fn scan(&mut self, pat: &str) -> bool {
+        match self
+            .characters
+            .get(self.cursor + 1..self.cursor + pat.len() + 1)
+        {
+            Some(substring) => {
+                if substring.iter().collect::<String>() == pat.to_string() {
+                    for _ in 0..pat.len() + 1 {
+                        self.pop();
+                    }
+                    return true;
+                }
+                return false;
+            }
+            None => return false,
+        }
+    }
 }
 impl Termination for Scanner {
     fn report(self) -> std::process::ExitCode {
@@ -55,6 +74,11 @@ mod tests {
         Scanner::new("lorem ipsum")
     }
 
+    #[fixture]
+    pub fn redis_scanner() -> Scanner {
+        Scanner::new("*2\r\n$4\r\nLLEN\r\n$6\r\nmylist\r\n")
+    }
+
     #[rstest]
     #[case(0, Some('l'))]
     #[case(5, Some(' '))]
@@ -63,5 +87,35 @@ mod tests {
     pub fn test_peek(mut scanner: Scanner, #[case] cursor: usize, #[case] expected: Option<char>) {
         scanner.cursor = cursor;
         assert_eq!(scanner.peek(), expected.as_ref())
+    }
+    #[rstest]
+    #[case(0, "orem", true, 5)]
+    #[case(0, "oram", false, 0)]
+    #[case(5, "ipsum", true, 11)]
+    pub fn test_scan(
+        mut scanner: Scanner,
+        #[case] cursor: usize,
+        #[case] pat: &str,
+        #[case] expected: bool,
+        #[case] expected_cursor: usize,
+    ) {
+        scanner.cursor = cursor;
+        assert_eq!(expected, scanner.scan(pat));
+        assert_eq!(expected_cursor, scanner.cursor);
+    }
+
+    #[rstest]
+    #[case(5, "\r\n", true, 8)]
+
+    pub fn test_scan_2(
+        mut redis_scanner: Scanner,
+        #[case] cursor: usize,
+        #[case] pat: &str,
+        #[case] expected: bool,
+        #[case] expected_cursor: usize,
+    ) {
+        redis_scanner.cursor = cursor;
+        assert_eq!(expected, redis_scanner.scan(pat));
+        assert_eq!(expected_cursor, redis_scanner.cursor);
     }
 }

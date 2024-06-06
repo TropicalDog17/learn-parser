@@ -17,20 +17,22 @@ fn parse_bulk_string(scanner: &mut Scanner) -> Result<String, Error> {
             }
             let length: usize;
             // Parse length
-            match scanner.pop() {
-                Some(l) => {
-                    length = char::to_digit(*l, 10).unwrap() as usize;
-                    if scanner.pop() != Some(&'\r') || scanner.pop() != Some(&'\n') {
-                        return Err(anyhow::format_err!("Invalid character, expect CRLF"));
-                    }
+            match scanner.peek() {
+                Some(_) => {
+                    length = parse_length(scanner).unwrap();
+
                     for _ in 0..length {
                         let c = scanner.pop().unwrap();
+                        dbg!(c);
+
                         result.push(*c)
                     }
-
+                    dbg!(scanner.peek());
                     // check if encounter CRLF, if not return error
-                    if scanner.pop() != Some(&'\r') || scanner.pop() != Some(&'\n') {
-                        return Err(anyhow::format_err!("Invalid character, expect CRLF"));
+                    if scanner.peek() != Some(&'\r') || !scanner.scan("\n") {
+                        return Err(anyhow::format_err!(
+                            "Invalid character, expect CRLF after getting all elements"
+                        ));
                     }
                     return Ok(result);
                 }
@@ -54,14 +56,10 @@ fn parse_array_command(scanner: &mut Scanner) -> Result<Command, Error> {
                 ));
             }
             let length: usize;
-            match scanner.pop() {
-                Some(l) => {
-                    length = char::to_digit(*l, 10).unwrap() as usize;
-                    if scanner.pop() != Some(&'\r') || scanner.pop() != Some(&'\n') {
-                        return Err(anyhow::format_err!(
-                            "Invalid character, expect CRLF after array length"
-                        ));
-                    }
+            match scanner.peek() {
+                Some(_) => {
+                    length = parse_length(scanner).unwrap();
+
                     for _ in 0..length {
                         let parsed_string = parse_bulk_string(scanner);
                         match parsed_string {
@@ -89,6 +87,30 @@ fn parse_array_command(scanner: &mut Scanner) -> Result<Command, Error> {
     }
 }
 
+fn parse_length(scanner: &mut Scanner) -> Result<usize, Error> {
+    let length: usize;
+    let mut s = Vec::new();
+    while scanner.peek().is_some() {
+        let digit = scanner.peek().unwrap();
+        // Check if end of length part
+        if !digit.is_ascii_digit() {
+            if *digit != '\r' || !scanner.scan("\n") {
+                return Err(anyhow::format_err!("invalid end of length, expect CTRF"));
+            }
+            // Break if encounter CRLF
+            break;
+        } else {
+            s.push(digit.to_string());
+            // Advance to next digit(if any)
+            scanner.pop();
+        }
+    }
+
+    // TODO: handle error
+    length = s.concat().parse::<usize>()?;
+    Ok(length)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,7 +121,7 @@ mod tests {
     #[case("$8\r\nsunlight\r\n", "sunlight", 14)]
     #[case("$3\r\nhaha\r\n", "", 0)]
     #[case("$1\r\nx\r\n", "x", 7)]
-
+    #[case("$11\r\nwhattheheck\r\n", "whattheheck", 18)]
     fn test_parse_bulk_string(
         #[case] test_str: &str,
         #[case] expected: &str,
