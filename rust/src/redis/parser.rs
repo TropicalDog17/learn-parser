@@ -23,11 +23,9 @@ fn parse_bulk_string(scanner: &mut Scanner) -> Result<String, Error> {
 
                     for _ in 0..length {
                         let c = scanner.pop().unwrap();
-                        dbg!(c);
 
                         result.push(*c)
                     }
-                    dbg!(scanner.peek());
                     // check if encounter CRLF, if not return error
                     if scanner.peek() != Some(&'\r') || !scanner.scan("\n") {
                         return Err(anyhow::format_err!(
@@ -149,8 +147,7 @@ mod tests {
         if expected.starts_with(&vec!["-1"]) {
             assert!(actual.is_err())
         } else {
-            // dbg!(actual);
-            // assert!(actual.is_ok());
+            assert!(actual.is_ok());
             assert_eq!(expected, actual.unwrap());
         }
     }
